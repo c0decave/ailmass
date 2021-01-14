@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 # quick and dirty test script for smtp relay
-# 250 2.0.0 0BHI16hQ021841-0BHI16hR021841 Message accepted for delivery
-# fortinet session 
 #
 # Done
 # ---- 
 # add cc, bcc and lists
 # add colors
 # add list of receivers
+# add custom attachment
+# fix <False> CC/BCC if not given
+# fix attachment name to auto name from the file
+# fix multipart issues
 # 
 # Todo
 # ----
 # add response check
-# add custom attachment
+# add auth for sender if login is supported
 
 import os
 import sys
@@ -23,7 +25,7 @@ import random
 import argparse
 
 __tool_name__ = 'mailrelay.py'
-__tool_version__ = '0.3.1'
+__tool_version__ = '0.3.3'
 __tool_author__ = 'dash'
 __tool_desc__ = 'not so quick but dirty\'n\'dirty tool for smtp relay checks, nothing fancy here.'
 
@@ -240,7 +242,7 @@ def run(args):
 			# send CC Mail
 			custData = 'CC: <{0}>\r\n'.format(targetCcMail)
 			sendCustom(sock,custData,False)
-	else:
+	elif targetCcMail:
 		# initiate DATA block for mailcontent
 		custData = 'CC: <{0}>\r\n'.format(targetCcMail)
 		sendCustom(sock,custData,False)
@@ -255,7 +257,7 @@ def run(args):
 			custData = 'CC: <{0}>\r\n'.format(targetBccMail)
 			sendCustom(sock,custData,False)
 
-	else:
+	elif targetBccMail:
 		# initiate DATA block for mailcontent
 		custData = 'BCC: <{0}>\r\n'.format(targetBccMail)
 		sendCustom(sock,custData,False)
@@ -267,18 +269,20 @@ def run(args):
 	if attachment:
 		buf=openFileRead(attachment)
 		attachmentB64 = base64.b64encode(buf)
+		attachmentB64 = attachmentB64.decode('utf-8')
 		# i should patent that crap
 		rndBoundary = int((str(random.random()+1)).replace('.',''))
-		bndry = '==============={0}=='.format(rndBoundary)
-		ct = 'Content-Type: multipart/mixed; boundary="{0}"'.format(bndry)
-		ct2 = 'MIME-Version: 1.0'
+		bndry = '{0}'.format(rndBoundary)
+		#bndry = '==============={0}=='.format(rndBoundary)
+		ct = 'Content-Type: multipart/mixed; boundary="{0}"\r\n'.format(rndBoundary)
+		ct2 = 'MIME-Version: 1.0\r\n'
 		sendCustom(sock,ct,False)
 		sendCustom(sock,ct2,False)
 
-		ctbody = '--{0}\r\nContent-Type: text/plain; charset="us-ascii"\r\nMIME-Version: 1.0\r\nContent-Transfer-Encoding: 7bit\r\n\r\n{1}\r\n'.format(bndry,body)
+		ctbody = '--{0}\r\nContent-Type: text/plain; charset="us-ascii"\r\nMIME-Version: 1.0\r\nContent-Transfer-Encoding: 7bit\r\n\r\n{1}\r\n\r\n'.format(bndry,body)
 		sendCustom(sock,ctbody,False)
 
-		ctattach = '--{0}\r\nContent-Type: application/octet-stream\r\nMIME-Version: 1.0\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename={1}\r\n\r\n{2}\r\n\r\n--{0}\r\n'.format(bndry,attachmentName, attachmentB64)
+		ctattach = '--{0}\r\nContent-Type: application/octet-stream\r\nMIME-Version: 1.0\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename={1}\r\n\r\n{2}\r\n\r\n--{0}\r\n\r\n'.format(bndry,attachmentName, attachmentB64)
 		sendCustom(sock,ctattach,False)
 	else:
 		body = '{0}\r\n'.format(body)
@@ -312,7 +316,7 @@ def main():
     parser.add_argument("-s","--email-subject",action="store",required=False,help='the subject',dest='subject',default='Imptant Notice about your paypal account')
     parser.add_argument("-b","--email-body",action="store",required=False,help='the body, e.g. \'hi there, this is a massivtest. please ignore.\'',dest='body',default='Sorry, you have been hacked.')
     parser.add_argument("-a","--attachment",action="store",required=False,help='send attachment',dest='attachment',default=False)
-    parser.add_argument("-A","--attachment-name",action="store",required=False,help='send attachment',dest='attachmentName',default="ls.file")
+    parser.add_argument("-A","--attachment-name",action="store",required=False,help='send attachment',dest='attachmentName',default=False)
     parser.add_argument("-m","--mta",action="store",required=False,help='the mta, FORMAT:<smtp>:<port>, e.g. smtp.provider.m:25',dest='mtaAddr',default='smtp.gmail.com:25')
 
     if len(sys.argv)==1:
